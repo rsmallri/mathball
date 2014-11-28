@@ -160,6 +160,7 @@ class GameTracker:
 
 
 
+
         if self.possession == Possession.human:
             existingSolutions = []
             for x in self.bluePlayers:
