@@ -149,30 +149,85 @@ class GameTracker:
 
         (newBallx, newBally) = self.playerInPossession.getBallCarryPosition()
 
-        self.ball.moveTo(newBallx, newBally)
+        self.ball.setPosition(newBallx,newBally)
+        self.ball.move()
 
-        #Re-arrange players not in possession
-        if self.possession == Possession.human:
-            for a in range (self.gridWidth, 0, - 1):
-                playersInColumn = self.attackMatrix[a][newi]
-                while playersInColumn > 0:
+        newi = self.playerInPossession.getCoords()[0]
+        self.rearrangePlayers("attack", newi)
+        self.rearrangePlayers("defence", newi)
 
-
-
-
+        existingSolutions = []
 
         if self.possession == Possession.human:
-            existingSolutions = []
             for x in self.bluePlayers:
-                if x != self.playerInPossession: #for players not in possession
+                if x != self.playerInPossession and x != self.bluePlayers[0]:
                     x.generatePuzzle(existingSolutions)
                     existingSolutions.append(x.getPuzzleSolution())
 
+        if self.playerInPossession.getCoords()[0] >= 3:
+            self.redPlayers[0].generatePuzzle(existingSolutions)
+
         elif self.possession == Possession.computer:
-            self.playerInPossession.generatePuzzle()
+            self.playerInPossession.generatePuzzle([])
+
+    def rearrangePlayers(self, side, balli):
+        if ((side == "attack" and  self.possession == Possession.human)) or ((side == "defence") and self.possession == Possession.computer):
+            players = list(self.bluePlayers)
+            players.pop(0)
+            if self.possession == Possession.human:
+                players.remove(self.playerInPossession)
+            players.sort(key=lambda Player: Player.i)
+        elif ((side == "attack" and  self.possession == Possession.computer)) or ((side == "defence") and self.possession == Possession.human):
+            players = list(self.redPlayers)
+            players.pop(0)
+            players.sort(key=lambda Player: Player.i, reverse = True)
+
+        if side == "attack":
+            start = self.gridWidth - 1
+            end = -1
+            step = -1
+        elif side == "defence":
+            start = 0
+            end = self.gridWidth
+            step = 1
+
+        if self.possession == Possession.human:
+            ballIndex = balli
+        elif self.possession == Possession.computer:
+            ballIndex = self.gridWidth - balli
+
+        for a in range (start, end, step):
+            if side == "attack":
+                playersInColumn = self.attackMatrix[a][ballIndex]
+            elif side == "defence":
+                playersInColumn = self.defenceMatrix[a][ballIndex]
+
+            while playersInColumn > 0 and players:
+                currentPlayer = players.pop()
+                oldj = currentPlayer.getCoords()[1]
+                if oldj == 0:
+                    newj = random.randint(0,1)
+                elif oldj == self.gridHeight - 1:
+                    newj = random.randint(self.gridHeight - 2, self.gridHeight - 1)
+                else:
+                    newj = oldj + random.randint(-1, 1)
+
+                if ((side == "attack" and  self.possession == Possession.human)) or ((side == "defence") and self.possession == Possession.computer):
+                    newi = a
+                elif ((side == "attack" and  self.possession == Possession.computer)) or ((side == "defence") and self.possession == Possession.human):
+                    newi = self.gridWidth - a
+
+                currentPlayer.setCoords(newi, newj)
+                currentPlayer.setPosition(*self.field.lookupGridPosition(newi, newj))
+
+                playersInColumn-= 1
 
 
+        for x in self.bluePlayers:
+            x.move()
 
+        for x in self.redPlayers:
+            x.move()
 
 
     def findNearestPlayer(self, posx, posy, players):
@@ -267,8 +322,8 @@ class Player:
         return (x, y)
 
     def generatePuzzle(self, existingSolutions = []):
-        uniqueSolution = 0
-        while uniqueSolution == 0: #while the puzzle's solution is not unique
+        uniqueSolution = False
+        while uniqueSolution == False: #while the puzzle's solution is not unique
             self.a = random.randint(0, 49) #generate terms
             self.b = random.randint(0, 49)
 
@@ -286,8 +341,15 @@ class Player:
     def getPosition(self):
         return (self.x, self.y)
 
+    def setPosition(self, x, y):
+        (self.x, self.y) = (x, y)
+
     def getCoords(self):
         return (self.i, self.j)
+
+    def move(self):
+        self.canvas.coords(self.canvasImage, self.x, self.y)
+        self.canvas.coords(self.canvasNameText, self.x, int(self.y + self.height/2 + 0.12 * self.height))
 
     def setCoords(self, i, j):
         (self.i, self.j) = (i, j)
@@ -295,8 +357,6 @@ class Player:
     def getPuzzleSolution(self):
         return self.a + self.b
 
-    #def moveTo(self, newX, newY):
-        #To be completed
 
     def destroyPuzzle(self):
         self.canvas.delete(self.puzzleText)
@@ -319,11 +379,14 @@ class Ball:
         self.canvasImage = canvas.create_image(self.x, self.y, image=self.image)
         #self.puzzleText = canvas.create_text(self.x, int(self.y - self.height/2 - 0.25 * self.height), text=str(self.a) + " + " + str(self.b), font=("Helvetica", "12"),fill="orange")
 
-    def moveTo(self, newX, newY):
-        self.canvas.coords(self.canvasImage, newX, newY)
+    def move(self):
+        self.canvas.coords(self.canvasImage, self.x, self.y)
 
     def getPosition(self):
         return (self.x, self.y)
+
+    def setPosition(self, x, y):
+        (self.x, self.y) = (x, y)
 
     def generatePuzzle(self):
         self.a = random.randint(0, 49)
