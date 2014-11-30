@@ -28,7 +28,7 @@ class GameTracker:
         self.consecutiveBadGuesses = 0
 
         #create Field
-        self.field = Field(self.canvas, self.gridWidth, self.gridHeight, *fieldSetup)#fieldSetup[0], fieldSetup[1], fieldSetup[2], fieldSetup[3], fieldSetup[4], fieldSetup[5], fieldSetup[6], fieldSetup[7], fieldSetup[8])
+        self.field = Field(self.canvas, self.gridWidth, self.gridHeight, *fieldSetup)
 
         #Create Players
         self.bluePlayers = self.createPlayers(bluePlayerNames, startPositionsBlue, pathToBluePlayerImage, pathToBlueGoalkeeperImage, "left")
@@ -370,7 +370,6 @@ class Player(FieldObject):
 
         self.canvas.coords(self.canvasImage, self.x + self.wigglePosition, self.y)
 
-
     def getBallCarryPosition(self):
         if self.side == "left":
             x = int(self.x + self.width / 2)
@@ -482,19 +481,31 @@ class Application(tk.Frame):
         self.createGame()
 
     def createWidgets(self):
-        canvas_width = 1200
-        canvas_height = 600
+        field_width = 1200
+        field_height = 600
         colourBackground = "#FBFBFB"
+
+        #for i in range(0,4):
+        #    self.columnconfigure(self, i, weight=0.2)
 
         self.mframe = tk.Frame(self, relief="flat", bd=3, background="white")
         self.mframe.pack(side="top")
+        self.mframe.grid(row=0,columnspan=5)
 
-        self.canvas = tk.Canvas(self.mframe, height=canvas_height, width=canvas_width, background=colourBackground)
+        self.canvas = tk.Canvas(self.mframe, height=field_height, width=field_width, background=colourBackground)
         self.canvas.pack(side="top")
         self.canvas.bind("<Button-1>", self.handleCanvasClick)
 
-        self.bframe = tk.Frame(self, relief="flat", bd=8)
-        self.bframe.pack(side="bottom")
+        self.update()
+
+
+        self.bar_canvas = tk.Canvas(self, height=int(field_height / 35), width=self.mframe.winfo_width())
+        #self.bar_canvas.grid(row=1,columnspan=5)
+        self.bar_canvas.pack(side="top")
+        self.bar_canvas.create_rectangle(1,1, int(self.bar_canvas.cget("width")) - 0, int(self.bar_canvas.cget("height")) - 0, fill="green", outline="black", width=1)
+
+        #self.bframe = tk.Frame(self, relief="flat", bd=5)
+        #self.bframe.pack(side="top")
 
         self.time = tk.Label(self.bframe, text="2:00", font=("Arial, 32"), relief="sunken", width=8, bd=2)
         self.time.pack(side="left", fill=tk.Y, padx=2)
@@ -521,6 +532,7 @@ class Application(tk.Frame):
         self.buttonPlayPause.bind("<Button-1>", self.handlePauseButtonClick)
         self.buttonPlayPause.pack(side="left", fill=tk.BOTH, padx=2)
 
+        print(self.mframe.winfo_width())
 
     def createGame(self):
         #Field Setup Data
@@ -590,8 +602,8 @@ class Application(tk.Frame):
 
 root = tk.Tk()
 root.wm_title("Math Ball")
-w = str(int(0.9 * root.winfo_screenwidth()))
-h = str(int(0.9 * root.winfo_screenheight()))
+w = str(int(0.95 * root.winfo_screenwidth()))
+h = str(int(0.95 * root.winfo_screenheight()))
 root.geometry(w + "x" + h + "+0+0")
 #root.attributes('-zoomed', True)
 
