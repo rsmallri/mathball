@@ -16,7 +16,8 @@ class GameTracker:
         self.canvas = canvas
 
         self.attackMatrix = [[2,2,1,0,0,0],[1,1,2,1,0,0],[0,2,1,1,1,0],[0,1,1,1,1,1],[0,0,1,1,1,2],[0,0,0,1,2,2]]
-        self.defenceMatrix = [[2,2,1,1,0,0],[1,2,2,1,0,0],[0,1,2,2,1,0],[0,0,1,2,2,1],[0,0,0,2,2,2],[0,0,0,1,3,2]]
+        #self.defenceMatrix = [[2,2,1,1,0,0],[1,2,2,1,0,0],[0,1,2,2,1,0],[0,0,1,2,2,1],[0,0,0,2,2,2],[0,0,0,1,3,2]]
+        self.defenceMatrix = [[2,3,1,0,0,0],[2,2,2,0,0,0],[1,2,2,1,0,0],[0,1,2,2,1,0],[0,0,1,2,2,1],[0,0,1,1,2,2]]
 
         self.gridWidth = 6
         self.gridHeight = 5
@@ -100,7 +101,8 @@ class GameTracker:
 
 
     def initiatePossessionChange(self, receivingPlayer = None):
-        players = self.bluePlayers if self.possession == Possession.human else self.redPlayers
+        players = list(self.bluePlayers) if self.possession == Possession.human else list(self.redPlayers)
+        players.pop(0) #remove goalie
 
         #Delete old puzzles on players
         if self.possessionLast == Possession.human:
@@ -153,13 +155,15 @@ class GameTracker:
             self.playerInPossession = self.findNearestPlayer(oldx, oldy, players)
             self.playerInPossession.setCoords(oldi, oldj)
 
+        self.playerInPossession.setPosition(*self.field.lookupGridPosition(*self.playerInPossession.getCoords()))
         (newBallx, newBally) = self.playerInPossession.getBallCarryPosition()
 
         self.ball.setPosition(newBallx,newBally)
         self.ball.move()
 
-        usedPositions = self.rearrangePlayers("attack")
-        self.rearrangePlayers("defence", usedPositions)
+        used_positions = 6*[None]
+        self.rearrangePlayers("attack", used_positions)
+        self.rearrangePlayers("defence", used_positions)
 
         existingSolutions = []
 
@@ -169,13 +173,14 @@ class GameTracker:
                     x.generatePuzzle(existingSolutions)
                     existingSolutions.append(x.getPuzzleSolution())
 
-        if self.playerInPossession.getCoords()[0] >= self.gridWidth - 2:
-            self.redPlayers[0].generatePuzzle(existingSolutions)
+            if self.playerInPossession.getCoords()[0] >= self.gridWidth - 2:
+                self.redPlayers[0].generatePuzzle(existingSolutions)
 
         elif self.possession == Possession.computer:
             self.playerInPossession.generatePuzzle([])
 
-    def rearrangePlayers(self, side, usedPositions = 6*[None]):
+    def rearrangePlayers(self, side, usedPositions):
+
         #add player in possession to the usedPositions matrix if it's not already there
         (balli, ballj) = self.playerInPossession.getCoords()
         if not usedPositions[balli]:
@@ -183,37 +188,49 @@ class GameTracker:
         else:
             if not ballj in usedPositions[balli] : usedPositions[balli].append(ballj)
 
-        if ((side == "attack" and  self.possession == Possession.human)) or ((side == "defence") and self.possession == Possession.computer):
-            players = list(self.bluePlayers)
-            players.pop(0)
-            if self.possession == Possession.human:
-                players.remove(self.playerInPossession)
-            players.sort(key=lambda Player: Player.i)
-        elif ((side == "attack" and  self.possession == Possession.computer)) or ((side == "defence") and self.possession == Possession.human):
-            players = list(self.redPlayers)
-            players.pop(0)
-            players.sort(key=lambda Player: Player.i, reverse = True)
-
-        if side == "attack":
+        #get the list of players to be arranged and remove the goalie. Setup order of processing columns and players based on which team is attacking
+        if self.possession == Possession.human:
+            if side == "attack":
+                players = self.bluePlayers[1:len(self.bluePlayers)]
+                team = "human"
+            elif side == "defence":
+                players = self.redPlayers[1:len(self.redPlayers)]
+                team = "computer"
+            reverse_flag = False
             start = self.gridWidth - 1
             end = -1
             step = -1
-        elif side == "defence":
+        elif self.possession == Possession.computer:
+            if side == "attack":
+                players = self.redPlayers[1:len(self.redPlayers)]
+                team = "computer"
+            elif side == "defence":
+                players = self.bluePlayers[1:len(self.bluePlayers)]
+                team = "human"
+            reverse_flag = True
             start = 0
             end = self.gridWidth
             step = 1
 
+        if side == "attack":    #if it is the attack side remove the player in possession from list of players to be rearranged
+            players.remove(self.playerInPossession)
+
+        players.sort(key=lambda Player: Player.i, reverse = reverse_flag)
+
         for a in range (start, end, step):
+            if team == "human":
+                (matrixi, matrixj) = (balli, a)
+            else:
+                (matrixi, matrixj) = (self.gridWidth - balli - 1, self.gridWidth - a - 1)
+
             if side == "attack":
-                playersInColumn = self.attackMatrix[a][balli]
+                playersInColumn = self.attackMatrix[matrixi][matrixj]
             elif side == "defence":
-                playersInColumn = self.defenceMatrix[a][balli]
+                playersInColumn = self.defenceMatrix[matrixi][matrixj]
 
             while playersInColumn > 0 and players:
-
                 currentPlayer = players.pop()
                 oldj = currentPlayer.getCoords()[1]
-
 
                 if side == "attack":    #if attacking side, let players new rows be no more than 1 higher or lower than previous
                     if oldj <= 1:
@@ -230,19 +247,17 @@ class GameTracker:
                     for x in usedPositions[a]:
                         if x in possibleRows : possibleRows.remove(x)
 
+                if not possibleRows:
+                    raise NameError("No rows to place player")
+
                 newj = random.choice(possibleRows)
                 if usedPositions[a]:
                     usedPositions[a].append(newj)
                 else:
                     usedPositions[a] = [newj]
 
-                if ((side == "attack" and  self.possession == Possession.human)) or ((side == "defence") and self.possession == Possession.computer):
-                    newi = a
-                elif ((side == "attack" and  self.possession == Possession.computer)) or ((side == "defence") and self.possession == Possession.human):
-                    newi = self.gridWidth - a
-
-                currentPlayer.setCoords(newi, newj)
-                currentPlayer.setPosition(*self.field.lookupGridPosition(newi, newj))
+                currentPlayer.setCoords(a, newj)
+                currentPlayer.setPosition(*self.field.lookupGridPosition(a, newj))
 
                 playersInColumn-= 1
 
@@ -252,8 +267,6 @@ class GameTracker:
 
         for x in self.redPlayers:
             x.move()
-
-        return usedPositions
 
     def findNearestPlayer(self, posx, posy, players):
         distanceToNearestPlayer = int(self.canvas.cget("width")) + int(self.canvas.cget("height"))
