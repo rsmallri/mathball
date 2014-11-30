@@ -3,6 +3,7 @@ __author__ = 'ryan'
 import tkinter as tk
 import os
 from PIL import Image, ImageTk
+from abc import ABCMeta, abstractmethod
 import random
 from enum import Enum
 
@@ -309,7 +310,27 @@ class GameTracker:
     def getPaused(self):
         return self.paused
 
-class Player:
+class FieldObject(object):
+    __metaclass__ = ABCMeta
+
+    def getPosition(self):
+        return (self.x, self.y)
+
+    def setPosition(self, x, y):
+        (self.x, self.y) = (x, y)
+
+    def getCoords(self):
+        return (self.i, self.j)
+
+    def setCoords(self, i, j):
+        (self.i, self.j) = (i, j)
+
+    def getPuzzleSolution(self):
+        return self.a + self.b
+
+
+
+class Player(FieldObject):
     def __init__(self, canvas, starti, startj, startX, startY, name, imagePath, side):
         self.canvas = canvas
         self.i = starti     #grid column
@@ -374,31 +395,14 @@ class Player:
 
         self.puzzleText = self.canvas.create_text(self.x, int(self.y - self.height/2 - 0.10 * self.height), text=str(self.a) + " + " + str(self.b), font=("Helvetica", "16"),fill="black")
 
-
-    def getPosition(self):
-        return (self.x, self.y)
-
-    def setPosition(self, x, y):
-        (self.x, self.y) = (x, y)
-
-    def getCoords(self):
-        return (self.i, self.j)
-
     def move(self):
         self.canvas.coords(self.canvasImage, self.x, self.y)
         self.canvas.coords(self.canvasNameText, self.x, int(self.y + self.height/2 + 0.12 * self.height))
 
-    def setCoords(self, i, j):
-        (self.i, self.j) = (i, j)
-
-    def getPuzzleSolution(self):
-        return self.a + self.b
-
-
     def destroyPuzzle(self):
         self.canvas.delete(self.puzzleText)
 
-class Ball:
+class Ball(FieldObject):
     def __init__(self, canvas, startX, startY, imagePath):
         self.canvas = canvas
         self.x = startX
@@ -417,21 +421,12 @@ class Ball:
     def move(self):
         self.canvas.coords(self.canvasImage, self.x, self.y)
 
-    def getPosition(self):
-        return (self.x, self.y)
-
-    def setPosition(self, x, y):
-        (self.x, self.y) = (x, y)
-
     def generatePuzzle(self):
         self.a = random.randint(0, 49)
         self.b = random.randint(0, 49)
         self.puzzleText = self.canvas.create_text(self.x, int(self.y - self.height/2 - 0.5 * self.height), text=str(self.a) + " + " + str(self.b), font=("Helvetica", "16"),fill="black")
         self.puzzleTextBox = self.canvas.create_rectangle(self.canvas.bbox(self.puzzleText), width=0,  fill="#87FA89")
         self.canvas.lower(self.puzzleTextBox, self.puzzleText)
-
-    def getPuzzleSolution(self):
-        return self.a + self.b
 
     def destroyPuzzle(self):
         self.canvas.delete(self.puzzleTextBox)
@@ -556,13 +551,10 @@ class Application(tk.Frame):
         #Create Game Tracker
         self.game = GameTracker(self.canvas, fieldSetup, startPositionsBlue, bluePlayerNames, startPositionsRed, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage)
 
-
     def handleCanvasClick(self, event):
         self.buttonPlayPause.config(state='normal')
         if self.game.getGameRunning() == 0:
             self.game.startGame()
-
-
 
     def textReturnHandler(self, event):
         entryText = self.text.get()  #get contents of entry cell
@@ -606,5 +598,3 @@ root.geometry(w + "x" + h + "+0+0")
 app = Application(master=root)
 pollid = app.after(100, app.poll)
 app.mainloop()
-
-
