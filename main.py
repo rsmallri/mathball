@@ -485,54 +485,57 @@ class Application(tk.Frame):
         field_height = 600
         colourBackground = "#FBFBFB"
 
-        #for i in range(0,4):
-        #    self.columnconfigure(self, i, weight=0.2)
-
         self.mframe = tk.Frame(self, relief="flat", bd=3, background="white")
         self.mframe.pack(side="top")
-        self.mframe.grid(row=0,columnspan=5)
+        self.mframe.columnconfigure(0, weight=1)
+        self.mframe.columnconfigure(1, weight=1)
+        self.mframe.columnconfigure(2, weight=1)
+        self.mframe.columnconfigure(3, weight=1)
+        self.mframe.columnconfigure(4, weight=1)
 
         self.canvas = tk.Canvas(self.mframe, height=field_height, width=field_width, background=colourBackground)
         self.canvas.pack(side="top")
         self.canvas.bind("<Button-1>", self.handleCanvasClick)
 
-        self.update()
+        self.canvas.grid(row=0,columnspan=5)
 
+        #self.update()
 
-        self.bar_canvas = tk.Canvas(self, height=int(field_height / 35), width=self.mframe.winfo_width())
-        #self.bar_canvas.grid(row=1,columnspan=5)
-        self.bar_canvas.pack(side="top")
+        self.bar_canvas = tk.Canvas(self.mframe, height=int(field_height / 35), width=field_width)
+
+        self.bar_canvas.grid(row=1,columnspan=5)
         self.bar_canvas.create_rectangle(1,1, int(self.bar_canvas.cget("width")) - 0, int(self.bar_canvas.cget("height")) - 0, fill="green", outline="black", width=1)
 
         #self.bframe = tk.Frame(self, relief="flat", bd=5)
         #self.bframe.pack(side="top")
 
-        self.time = tk.Label(self.bframe, text="2:00", font=("Arial, 32"), relief="sunken", width=8, bd=2)
-        self.time.pack(side="left", fill=tk.Y, padx=2)
+        self.time = tk.Label(self.mframe, text="2:00", font=("Arial, 32"), relief="sunken", bd=2)
+        #self.time.pack(side="left", fill=tk.Y, padx=2)
+        self.time.grid(row=2,column=0, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
-        self.score = tk.Label(self.bframe, text="0 - 0", font=("Arial, 32"),  relief="sunken", width=8, bd=2)
-        self.score.pack(side="left", fill=tk.Y, padx=2)
+        self.score = tk.Label(self.mframe, text="0 - 0", font=("Arial, 32"),  relief="sunken", bd=2)
+        #self.score.pack(side="left", fill=tk.Y, padx=2)
+        self.score.grid(row=2,column=1, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
-        self.text = tk.Entry(self.bframe,font=("Helvetica",48), justify="center", width = 8)
+        self.text = tk.Entry(self.mframe,font=("Helvetica",36), justify="center", width=1)
         self.text.focus()
         self.text.bind("<Return>",self.textReturnHandler)
-        self.text.pack(side="left", fill=tk.Y, padx=2)
+        #self.text.pack(side="left", fill=tk.Y, padx=2)
+        self.text.grid(row=2,column=2, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
-        self.frameResults = tk.Frame(self.bframe, background="black", bd=1)
-        self.frameResults.pack(side="left", fill=tk.Y)
+        self.frameResults = tk.Frame(self.mframe, background="black", bd=1)
+        self.frameResults.grid(row=2,column=3, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
         numLastResults = 3
         self.labelsLastResults = numLastResults * [None]
         for i in range(0, numLastResults):
-            self.labelsLastResults[i] = tk.Label(self.frameResults, text='\u2713', font=("System", "50"), background="white", fg="white")
-            self.labelsLastResults[i] = tk.Label(self.frameResults, text='\u2713', font=("System", "50"), background="white", fg="white")
-            self.labelsLastResults[i].pack(side="left", padx=1, pady=1)
+            self.labelsLastResults[i] = tk.Label(self.frameResults, text='\u2713', font=("System", "20"), background="white", fg="white", width=1)
+            self.labelsLastResults[i].pack(side="left",padx=1, expand=1, fill="both")
 
-        self.buttonPlayPause = tk.Button(self.bframe, text="Pause", width = 50, state='disabled')
+        self.buttonPlayPause = tk.Button(self.mframe, text="Pause", state='disabled')
         self.buttonPlayPause.bind("<Button-1>", self.handlePauseButtonClick)
-        self.buttonPlayPause.pack(side="left", fill=tk.BOTH, padx=2)
-
-        print(self.mframe.winfo_width())
+        #self.buttonPlayPause.pack(side="left", fill=tk.BOTH, padx=2)
+        self.buttonPlayPause.grid(row=2,column=4, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
     def createGame(self):
         #Field Setup Data
