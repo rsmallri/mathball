@@ -2,6 +2,7 @@ __author__ = 'ryan'
 
 import tkinter as tk
 import os
+import time
 from PIL import Image, ImageTk
 from abc import ABCMeta, abstractmethod
 import random
@@ -12,14 +13,34 @@ class Possession(Enum):
     human = 2
     computer = 3
 
-class GameTracker:
-    def __init__(self, canvas, fieldSetup, startPositionsBlue, bluePlayerNames, startPositionsRed, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage):
+class TimerBar():
+    def __init__(self, canvas, rectangle):
         self.canvas = canvas
+        self.rectangle = rectangle
 
+    def update(self, perc_remaining):
+        self.canvas.coords(self.rectangle, 1, 1, int(perc_remaining * int(self.canvas.cget("width"))), self.canvas.cget("height"))
+        self.canvas.itemconfig(self.rectangle, fill = "#" + ("%02x" % int((1-perc_remaining)*255)) + ("%02x" % int(perc_remaining*255)) + "00" )
+
+    def reset(self):
+        self.canvas.coords(self.rectangle, 1, 1, self.canvas.cget("width"), self.canvas.cget("height"))
+        self.canvas.itemconfig(self.rectangle, fill = "#00FF00")
+
+class GameTracker:
+    def __init__(self, canvas, timer_bar, label_time, label_score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage):
+        self.canvas = canvas
+        self.timer_bar = timer_bar
+        self.label_time = label_time
+        self.label_score = label_score
+        self.shot_time = 5
+        self.game_time_left = 120
+
+        self.start_positions_blue = [[0, 2], [1, 1], [1, 3], [2, 0], [2, 2], [2, 4]]
+        self.start_positions_red = [[3, 0], [3, 2], [3, 4], [4, 1], [4, 3], [5, 2]]
         self.attackMatrix = [[2,2,1,0,0,0],[1,1,2,1,0,0],[0,2,1,1,1,0],[0,1,1,1,1,1],[0,0,1,1,1,2],[0,0,0,1,2,2]]
-        #self.defenceMatrix = [[2,2,1,1,0,0],[1,2,2,1,0,0],[0,1,2,2,1,0],[0,0,1,2,2,1],[0,0,0,2,2,2],[0,0,0,1,3,2]]
         self.defenceMatrix = [[2,3,1,0,0,0],[2,2,2,0,0,0],[1,2,2,1,0,0],[0,1,2,2,1,0],[0,0,1,2,2,1],[0,0,1,1,2,2]]
 
+        self.score = [0, 0]
         self.gridWidth = 6
         self.gridHeight = 5
         self.possession = Possession.notinposession
@@ -31,29 +52,76 @@ class GameTracker:
         self.field = Field(self.canvas, self.gridWidth, self.gridHeight, *fieldSetup)
 
         #Create Players
-        self.bluePlayers = self.createPlayers(bluePlayerNames, startPositionsBlue, pathToBluePlayerImage, pathToBlueGoalkeeperImage, "left")
+        self.bluePlayers = self.createPlayers(bluePlayerNames, self.start_positions_blue, pathToBluePlayerImage, pathToBlueGoalkeeperImage, "left")
         self.numBluePlayers = len(self.bluePlayers)
-        self.redPlayers = self.createPlayers(redPlayerNames, startPositionsRed, pathToRedPlayerImage, pathToRedGoalkeeperImage, "right")
+        self.redPlayers = self.createPlayers(redPlayerNames, self.start_positions_red, pathToRedPlayerImage, pathToRedGoalkeeperImage, "right")
         self.numRedPlayers = len(self.redPlayers)
 
         #create Ball
         (ballStartX, ballStartY) = self.field.getCentreFieldPosition()
         self.ball = Ball(self.canvas, ballStartX, ballStartY, pathToBallImage)
 
-        self.enterToStartText = self.canvas.create_text(int(int(self.canvas.cget("width"))/ 2), int(int(self.canvas.cget("height")) * 0.4), text="CLICK PARA COMENZAR", font=("Helvetica", "20"), fill="blue")
-        self.enterToStartTextBox = self.canvas.create_rectangle(self.canvas.bbox(self.enterToStartText), width=0,  fill="#87FA89")
-        self.canvas.lower(self.enterToStartTextBox, self.enterToStartText)
+        self.message_text = self.canvas.create_text(int(int(self.canvas.cget("width"))/ 2), int(int(self.canvas.cget("height")) * 0.4), text="CLICK PARA COMENZAR", font=("Helvetica", "20"), fill="blue")
+        a,b,c,d =  self.canvas.bbox(self.message_text)
+        self.message_textbox = self.canvas.create_rectangle(a - 10, b - 5, c + 10, d +5, width=1,  fill="white", outline="black")
+        self.canvas.lower(self.message_textbox, self.message_text)
 
 
     def startGame(self):
+        self.time_last = time.time()
+        self.move_time_left = self.shot_time
+        self.wiggle_time_left = 0.1
         self.gameRunning = True
-        self.canvas.delete(self.enterToStartText)
-        self.canvas.delete(self.enterToStartTextBox)
+        self.canvas.itemconfig(self.message_text, state = tk.HIDDEN)
+        self.canvas.itemconfig(self.message_textbox, state = tk.HIDDEN)
+
+        if self.score != [0, 0]:     #if someone just scored move players and ball back to starting positions
+            self.ball.setPosition(*self.field.getCentreFieldPosition())
+            self.ball.move()
+            
+            for i in range(1, len(self.bluePlayers)):
+                self.bluePlayers[i].setCoords(*self.start_positions_blue[i - 1])
+                self.bluePlayers[i].setPosition(*self.field.lookupGridPosition(*self.start_positions_blue[i - 1]))
+                self.bluePlayers[i].move()
+            
+            for i in range(1, len(self.redPlayers)):
+                self.redPlayers[i].setCoords(*self.start_positions_red[i - 1])
+                self.redPlayers[i].setPosition(*self.field.lookupGridPosition(*self.start_positions_red[i - 1]))
+                self.redPlayers[i].move()
+                
         self.ball.generatePuzzle()
-        #add code for timers
+
+
+    def update(self):
+        if self.gameRunning == True and self.paused == False:
+            time_now = time.time()
+
+            self.game_time_left -= time_now - self.time_last
+            m, s = divmod(self.game_time_left, 60)
+
+            if self.game_time_left < 0:
+                m, s = 0, 0
+                self.gameRunning = False
+
+            self.move_time_left -= time_now - self.time_last
+            if self.move_time_left < 0:
+                self.possessionLast = self.possession
+                self.possession = Possession.computer
+                self.initiatePossessionChange()
+            else:
+                perc_time_left = self.move_time_left / self.shot_time
+                self.timer_bar.update(perc_time_left)
+
+            self.wiggle_time_left -= time_now - self.time_last
+            if self.wiggle_time_left < 0:
+                self.wigglePlayers()
+                self.wiggle_time_left = 0.1
+
+            self.label_time.configure(text = "%d : %02d" % (m, s) )
+
+            self.time_last = time_now
 
     def wigglePlayers(self):
-        if self.gameRunning == True and self.paused == False:
             for x in self.bluePlayers:
                 x.wiggle()
             for x in self.redPlayers:
@@ -102,6 +170,11 @@ class GameTracker:
 
 
     def initiatePossessionChange(self, receivingPlayer = None):
+        goalScored = False
+        self.timer_bar.reset()
+        self.time_last = time.time()
+        self.move_time_left = self.shot_time
+
         players = list(self.bluePlayers) if self.possession == Possession.human else list(self.redPlayers)
         players.pop(0) #remove goalie
 
@@ -127,9 +200,18 @@ class GameTracker:
         #if a member of the computer team is passing to a teammate
         elif self.possessionLast == Possession.computer and self.possession == Possession.computer:
             oldi = self.playerInPossession.getCoords()[0]
-            if oldi == 0 or ((oldi == 1) and random.choice(0 , 1)):     #If in the the first column, or with a 50% chance in the second, score a goal
+            if oldi == 0 or ((oldi == 1) and random.choice([True, False])):     #If in the the first column, or with a 50% chance in the second, score a goal
                 #Handle Goal
-                print("goal to computer")
+                goalScored = True
+                self.score[1] += 1  #goal to computer
+                self.label_score.config(text = str(self.score[0]) + " - " + str(self.score[1]))
+                self.ball.setPosition(*self.field.getGoalBallPosition("left"))
+                self.ball.move()
+                self.gameRunning = False
+                self.canvas.itemconfig(self.message_text, text = "CLICK PARA CONTINUAR", state = tk.NORMAL)
+                self.canvas.itemconfig(self.message_textbox, state = tk.NORMAL)
+                self.possessionLast = self.possession
+                self.possession = Possession.notinposession
             else:   #pass ball forward
                 #determine column to pass to
                 if oldi == 1:
@@ -156,29 +238,29 @@ class GameTracker:
             self.playerInPossession = self.findNearestPlayer(oldx, oldy, players)
             self.playerInPossession.setCoords(oldi, oldj)
 
-        self.playerInPossession.setPosition(*self.field.lookupGridPosition(*self.playerInPossession.getCoords()))
-        (newBallx, newBally) = self.playerInPossession.getBallCarryPosition()
+        if not goalScored:
+            self.playerInPossession.setPosition(*self.field.lookupGridPosition(*self.playerInPossession.getCoords()))
+            (newBallx, newBally) = self.playerInPossession.getBallCarryPosition()
+            self.ball.setPosition(newBallx,newBally)
+            self.ball.move()
 
-        self.ball.setPosition(newBallx,newBally)
-        self.ball.move()
+            used_positions = 6*[None]
+            self.rearrangePlayers("attack", used_positions)
+            self.rearrangePlayers("defence", used_positions)
 
-        used_positions = 6*[None]
-        self.rearrangePlayers("attack", used_positions)
-        self.rearrangePlayers("defence", used_positions)
+            existingSolutions = []
 
-        existingSolutions = []
+            if self.possession == Possession.human:
+                for x in self.bluePlayers:
+                    if x != self.playerInPossession and x != self.bluePlayers[0]:
+                        x.generatePuzzle(existingSolutions)
+                        existingSolutions.append(x.getPuzzleSolution())
 
-        if self.possession == Possession.human:
-            for x in self.bluePlayers:
-                if x != self.playerInPossession and x != self.bluePlayers[0]:
-                    x.generatePuzzle(existingSolutions)
-                    existingSolutions.append(x.getPuzzleSolution())
+                if self.playerInPossession.getCoords()[0] >= self.gridWidth - 2:
+                    self.redPlayers[0].generatePuzzle(existingSolutions)
 
-            if self.playerInPossession.getCoords()[0] >= self.gridWidth - 2:
-                self.redPlayers[0].generatePuzzle(existingSolutions)
-
-        elif self.possession == Possession.computer:
-            self.playerInPossession.generatePuzzle([])
+            elif self.possession == Possession.computer:
+                self.playerInPossession.generatePuzzle([])
 
     def rearrangePlayers(self, side, usedPositions):
 
@@ -305,6 +387,9 @@ class GameTracker:
         self.gameRunning = running
 
     def setPaused(self, isPaused):
+        if isPaused == False:
+            self.time_last = time.time()
+
         self.paused = isPaused
 
     def getPaused(self):
@@ -344,7 +429,7 @@ class Player(FieldObject):
         self.wigglePosition = int(0)
 
         tempWidth, tempHeight = self.originalBitmap.size
-        playerHeight = int(int(canvas.cget("height")) * 13 / 100)
+        playerHeight = int(int(canvas.cget("height")) * 12 / 100)
         self.bitmap = self.originalBitmap.resize((int(tempWidth / tempHeight * playerHeight), playerHeight), Image.ANTIALIAS)
         (self.width, self.height) = self.bitmap.size
         self.image = ImageTk.PhotoImage(self.bitmap)
@@ -424,7 +509,7 @@ class Ball(FieldObject):
         self.a = random.randint(0, 49)
         self.b = random.randint(0, 49)
         self.puzzleText = self.canvas.create_text(self.x, int(self.y - self.height/2 - 0.5 * self.height), text=str(self.a) + " + " + str(self.b), font=("Helvetica", "16"),fill="black")
-        self.puzzleTextBox = self.canvas.create_rectangle(self.canvas.bbox(self.puzzleText), width=0,  fill="#87FA89")
+        self.puzzleTextBox = self.canvas.create_rectangle(self.canvas.bbox(self.puzzleText), width=0,  fill="#54ED4E")
         self.canvas.lower(self.puzzleTextBox, self.puzzleText)
 
     def destroyPuzzle(self):
@@ -439,14 +524,14 @@ class Field:
         self.height = int(canvas.cget("height"))
         self.leftFieldLineX = int(self.width * (1 - fieldCanvasWidthPercentage/100)/2) # X co-ordinate of left field line
         self.rightFieldLineX = int(self.width * (1 + fieldCanvasWidthPercentage/100)/2) # X co-ordinate of left field line
-        goalHeight = int(self.height * goalHeightPercentage / 100)
+        self.goalHeight = int(self.height * goalHeightPercentage / 100)
         goalSquareHeight = int(self.height * goalSquareHeightPercentage / 100)
         goalSquareWidth = int(self.width * goalSquareWidthPercentage / 100)
-        self.goalPostThickness = int(goalHeight * goalPostThicknessPercentage / 100)
+        self.goalPostThickness = int(self.goalHeight * goalPostThicknessPercentage / 100)
         centreCircleSize = int(self.height * centreCircleSizePercentage / 100)
 
-        leftGoalPoints = [2, int(self.height / 2 - goalHeight/2), self.leftFieldLineX, int(self.height / 2 - goalHeight/2), self.leftFieldLineX, int(self.height / 2 - goalHeight/2 + self.goalPostThickness), 2 + self.goalPostThickness, int(self.height / 2 - goalHeight/2 + self.goalPostThickness), 2 + self.goalPostThickness, int(self.height / 2 + goalHeight/2 - self.goalPostThickness), self.leftFieldLineX, int(self.height / 2 + goalHeight/2 - self.goalPostThickness), self.leftFieldLineX, int(self.height / 2 + goalHeight/2), 2, int(self.height / 2 + goalHeight/2), 2, int(self.height / 2 - goalHeight/2)]
-        rightGoalPoints = [self.width, int(self.height / 2 - goalHeight/2), self.rightFieldLineX, int(self.height / 2 - goalHeight/2), self.rightFieldLineX, int(self.height / 2 - goalHeight/2 + self.goalPostThickness), self.width - self.goalPostThickness, int(self.height / 2 - goalHeight/2 + self.goalPostThickness), self.width - self.goalPostThickness, int(self.height / 2 + goalHeight/2 - self.goalPostThickness), self.rightFieldLineX, int(self.height / 2 + goalHeight/2 - self.goalPostThickness), self.rightFieldLineX, int(self.height / 2 + goalHeight/2), self.width, int(self.height / 2 + goalHeight/2), self.width, int(self.height / 2 - goalHeight/2)]
+        leftGoalPoints = [2, int(self.height / 2 - self.goalHeight/2), self.leftFieldLineX, int(self.height / 2 - self.goalHeight/2), self.leftFieldLineX, int(self.height / 2 - self.goalHeight/2 + self.goalPostThickness), 2 + self.goalPostThickness, int(self.height / 2 - self.goalHeight/2 + self.goalPostThickness), 2 + self.goalPostThickness, int(self.height / 2 + self.goalHeight/2 - self.goalPostThickness), self.leftFieldLineX, int(self.height / 2 + self.goalHeight/2 - self.goalPostThickness), self.leftFieldLineX, int(self.height / 2 + self.goalHeight/2), 2, int(self.height / 2 + self.goalHeight/2), 2, int(self.height / 2 - self.goalHeight/2)]
+        rightGoalPoints = [self.width, int(self.height / 2 - self.goalHeight/2), self.rightFieldLineX, int(self.height / 2 - self.goalHeight/2), self.rightFieldLineX, int(self.height / 2 - self.goalHeight/2 + self.goalPostThickness), self.width - self.goalPostThickness, int(self.height / 2 - self.goalHeight/2 + self.goalPostThickness), self.width - self.goalPostThickness, int(self.height / 2 + self.goalHeight/2 - self.goalPostThickness), self.rightFieldLineX, int(self.height / 2 + self.goalHeight/2 - self.goalPostThickness), self.rightFieldLineX, int(self.height / 2 + self.goalHeight/2), self.width, int(self.height / 2 + self.goalHeight/2), self.width, int(self.height / 2 - self.goalHeight/2)]
 
         self.fieldOutline = canvas.create_rectangle(self.leftFieldLineX, 2, self.rightFieldLineX, self.height, fill=colourField , outline=colourFieldLines, width=2) #draw field
         self.centreCircle = canvas.create_oval(int(self.width / 2) - int( centreCircleSize / 2), int(self.height / 2) - int(centreCircleSize / 2), int(self.width / 2) + int( centreCircleSize / 2), int(self.height / 2) + int( centreCircleSize / 2), outline=colourFieldLines, width=2) #draw centre circle
@@ -463,6 +548,13 @@ class Field:
     
     def getCentreFieldPosition(self):
         return (int(self.leftFieldLineX + (self.rightFieldLineX - self.leftFieldLineX)/2), int(self.height / 2))
+
+    def getGoalBallPosition(self, side):
+        ymod = int(0.35 * self.goalHeight * random.choice([-1, 1]))
+        if side == "left":
+            return (int(self.leftFieldLineX *0.35), int(self.height / 2 + ymod))
+        elif side == "right":
+            return (int(self.rightFieldLineX + 0.65 * (self.width - self.rightFieldLineX)), int(self.height / 2 + ymod))
 
     def getGoalkeeperPosition(self, side):
         if side == "left":
@@ -501,23 +593,23 @@ class Application(tk.Frame):
 
         #self.update()
 
-        self.bar_canvas = tk.Canvas(self.mframe, height=int(field_height / 35), width=field_width)
-
-        self.bar_canvas.grid(row=1,columnspan=5)
-        self.bar_canvas.create_rectangle(1,1, int(self.bar_canvas.cget("width")) - 0, int(self.bar_canvas.cget("height")) - 0, fill="green", outline="black", width=1)
+        self.timer_canvas = tk.Canvas(self.mframe, height=int(field_height / 35), width=field_width)
+        self.timer_canvas.grid(row=1,columnspan=5)
+        self.timer_rectangle = self.timer_canvas.create_rectangle(1,1, int(self.timer_canvas.cget("width")) - 0, int(self.timer_canvas.cget("height")) - 0, fill="green", outline="black", width=1)
+        self.timer = TimerBar(self.timer_canvas, self.timer_rectangle)
 
         #self.bframe = tk.Frame(self, relief="flat", bd=5)
         #self.bframe.pack(side="top")
 
-        self.time = tk.Label(self.mframe, text="2:00", font=("Arial, 32"), relief="sunken", bd=2)
+        self.time = tk.Label(self.mframe, text="2:00", font=("Arial, 32"), relief="sunken", bd=2, width=1)
         #self.time.pack(side="left", fill=tk.Y, padx=2)
         self.time.grid(row=2,column=0, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
-        self.score = tk.Label(self.mframe, text="0 - 0", font=("Arial, 32"),  relief="sunken", bd=2)
+        self.score = tk.Label(self.mframe, text="0 - 0", font=("Arial, 32"),  relief="sunken", bd=2, width=1)
         #self.score.pack(side="left", fill=tk.Y, padx=2)
         self.score.grid(row=2,column=1, sticky=tk.W+tk.E+tk.N+tk.S, padx=2)
 
-        self.text = tk.Entry(self.mframe,font=("Helvetica",36), justify="center", width=1)
+        self.text = tk.Entry(self.mframe,font=("Helvetica",36), justify="center", width=1, state="disabled")
         self.text.focus()
         self.text.bind("<Return>",self.textReturnHandler)
         #self.text.pack(side="left", fill=tk.Y, padx=2)
@@ -550,10 +642,8 @@ class Application(tk.Frame):
                       "#CCCCCC"]    #Goal Post Colour
 
         #Player Setup Data
-        startPositionsBlue = [[0, 2], [1, 1], [1, 3], [2, 0], [2, 2], [2, 4]]
+        
         bluePlayerNames = ["Israel", "Luis Angel", "Roberto Carlos", "Moises", "Miguel", "Rafael", "Daniel"]
-
-        startPositionsRed = [[3, 0], [3, 2], [3, 4], [4, 1], [4, 3], [5, 2]]
         redPlayerNames = 7 * [None]
 
         #Setup Images
@@ -564,10 +654,11 @@ class Application(tk.Frame):
         pathToBallImage = os.path.join("Images", "Ball.png")
 
         #Create Game Tracker
-        self.game = GameTracker(self.canvas, fieldSetup, startPositionsBlue, bluePlayerNames, startPositionsRed, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage)
+        self.game = GameTracker(self.canvas, self.timer, self.time, self.score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage)
 
     def handleCanvasClick(self, event):
         self.buttonPlayPause.config(state='normal')
+        self.text.config(state='normal')
         if self.game.getGameRunning() == 0:
             self.game.startGame()
 
@@ -592,8 +683,8 @@ class Application(tk.Frame):
         self.text.delete(0, tk.END)
 
     def poll(self):
-        self.game.wigglePlayers()
-        self.after(100, self.poll)
+        self.game.update()
+        self.after(20, self.poll)
 
     def handlePauseButtonClick(self, event):
         if self.game.getPaused(): #if paused
@@ -611,5 +702,5 @@ root.geometry(w + "x" + h + "+0+0")
 #root.attributes('-zoomed', True)
 
 app = Application(master=root)
-pollid = app.after(100, app.poll)
+pollid = app.after(20, app.poll)
 app.mainloop()
