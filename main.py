@@ -125,7 +125,7 @@ class GameTracker:
                 m, s = 0, 0
 
                 if self.score[0] > self.score[1]:
-                    message_text = "GAN&#xd3 JUGADOR " + str(self.score[0]) + " - " + str(self.score[1])
+                    message_text = "GAN\xd3 JUGADOR " + str(self.score[0]) + " - " + str(self.score[1])
                     text_colour = "blue"
                 elif self.score[1] > self.score[0]:
                     message_text = "GAN\xd3 COMPUTADOR " + str(self.score[1]) + " - " + str(self.score[0])
