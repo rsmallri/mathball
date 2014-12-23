@@ -1,3 +1,4 @@
+# Written by Ryan Smallridge, ryan@smallridge.com.au
 __author__ = 'ryan'
 
 import tkinter as tk
@@ -27,13 +28,14 @@ class TimerBar():
         self.canvas.itemconfig(self.rectangle, fill = "#00FF00")
 
 class GameTracker:
-    def __init__(self, canvas, timer_bar, label_time, label_score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage):
+    def __init__(self, canvas, timer_bar, label_time, text_input, label_score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage):
         self.game_just_finished = False
         self.canvas = canvas
+        self.text_input = text_input
         self.timer_bar = timer_bar
         self.label_time = label_time
         self.label_score = label_score
-        self.shot_time = 5
+        self.shot_time = 15
         self.game_time_left = 120
 
         self.start_positions_blue = [[0, 2], [1, 1], [1, 3], [2, 0], [2, 2], [2, 4]]
@@ -45,6 +47,7 @@ class GameTracker:
         self.gridWidth = 6
         self.gridHeight = 5
         self.possession = Possession.notinposession
+        self.possessionLast = Possession.notinposession
         self.gameRunning = 0
         self.paused = 0
         self.consecutiveBadGuesses = 0
@@ -89,8 +92,11 @@ class GameTracker:
         self.canvas.itemconfig(self.message_text, state = tk.HIDDEN)
         self.canvas.itemconfig(self.message_textbox, state = tk.HIDDEN)
 
-        if self.score != [0, 0] or self.game_just_finished:     #if someone just scored reset the field
-            self.destroyPlayerPuzzles()
+        if (self.score != [0, 0]) or self.game_just_finished:     #if someone just scored reset the field
+            self.destroyPuzzles()
+
+            self.possessionLast = self.possession
+            self.possession = Possession.notinposession
             self.ball.setPosition(*self.field.getCentreFieldPosition())
             self.ball.move()
             
@@ -119,6 +125,7 @@ class GameTracker:
             time_now = time.time()
 
             self.game_time_left -= time_now - self.time_last
+            self.move_time_left -= time_now - self.time_last
             m, s = divmod(self.game_time_left, 60)
 
             if self.game_time_left < 0:
@@ -131,7 +138,7 @@ class GameTracker:
                     message_text = "GAN\xd3 COMPUTADOR " + str(self.score[1]) + " - " + str(self.score[0])
                     text_colour = "red"
                 elif self.score[0] == self.score[1]:
-                    message_text = "EMPATE" + str(self.score[0]) + " - " + str(self.score[1])
+                    message_text = "EMPATE " + str(self.score[0]) + " - " + str(self.score[1])
                     text_colour = "black"
 
                 self.canvas.itemconfig(self.highlight_textbox, state = tk.NORMAL)
@@ -147,12 +154,15 @@ class GameTracker:
                 self.gameRunning = False
                 self.game_just_finished = True
 
+                self.text_input.config(state='disabled') #disable textbox
 
-            self.move_time_left -= time_now - self.time_last
-            if self.move_time_left < 0:
+
+
+            elif self.move_time_left < 0:
                 self.possessionLast = self.possession
                 self.possession = Possession.computer
                 self.initiatePossessionChange()
+                self.text_input.delete(0, tk.END) #clear input text field
             else:
                 perc_time_left = self.move_time_left / self.shot_time
                 self.timer_bar.update(perc_time_left)
@@ -199,12 +209,15 @@ class GameTracker:
             if inputNumber == self.playerInPossession.getPuzzleSolution():
                 goodAnswer = True
 
-        if goodAnswer and not goalScored:
-            self.possession = Possession.human
-        else:
+        if not goodAnswer:
             self.consecutiveBadGuesses += 1
 
-        if self.consecutiveBadGuesses == 3:
+        if (goodAnswer or self.consecutiveBadGuesses  == 3) and not goalScored:
+            self.destroyPuzzles()
+
+        if goodAnswer and not goalScored:
+            self.possession = Possession.human
+        elif self.consecutiveBadGuesses == 3:
             self.possession = Possession.computer
 
         if goodAnswer or (self.consecutiveBadGuesses == 3):
@@ -218,14 +231,21 @@ class GameTracker:
 
         return goodAnswer
 
-    def destroyPlayerPuzzles(self):
+    def destroyPuzzles(self):
+
+        #Delete ball puzzle
+        if self.possession == Possession.notinposession:
+            self.ball.destroyPuzzle()
+
         #Delete old puzzles on players
-        if self.possessionLast == Possession.human:
+        elif self.possession == Possession.human:
             for x in self.bluePlayers:
                 x.destroyPuzzle()
 
             self.redPlayers[0].destroyPuzzle()
-        elif self.possessionLast == Possession.computer:
+
+        #Delete old puzzles on computer
+        elif self.possession == Possession.computer:
             self.playerInPossession.destroyPuzzle()
 
     def initiatePossessionChange(self, receivingPlayer = None):
@@ -236,8 +256,6 @@ class GameTracker:
 
         players = list(self.bluePlayers) if self.possession == Possession.human else list(self.redPlayers)
         players.pop(0) #remove goalie
-
-        self.destroyPlayerPuzzles()
         
         #if the ball was previously in the centre, find the nearest player of the receiving team
         if self.possessionLast == Possession.notinposession:
@@ -307,6 +325,8 @@ class GameTracker:
                 self.playerInPossession.generatePuzzle([])
 
     def kickGoal(self, side):
+        self.text_input.delete(0, tk.END) #clear textbox
+        self.text_input.config(state='disabled') #disable textbox
         if side == "right": #goal to player
             self.score[0] += 1
             goal_message = "\u00a1GOL DEL JUGADOR!"
@@ -329,8 +349,7 @@ class GameTracker:
         self.canvas.itemconfig(self.message_textbox, state = tk.NORMAL)
         self.canvas.tag_raise(self.message_textbox)
         self.canvas.tag_raise(self.message_text)
-        self.possessionLast = self.possession
-        self.possession = Possession.notinposession
+
 
     def rearrangePlayers(self, side, usedPositions):
 
@@ -459,6 +478,10 @@ class GameTracker:
     def setPaused(self, isPaused):
         if isPaused == False:
             self.time_last = time.time()
+            if self.gameRunning:
+                self.text_input.config(state='normal')
+        else:
+            self.text_input.config(state='disabled')
 
         self.paused = isPaused
 
@@ -661,7 +684,8 @@ class Application(tk.Frame):
 
         self.canvas = tk.Canvas(self.mframe, height=field_height, width=field_width, background=colourBackground)
         self.canvas.pack(side="top")
-        self.canvas.bind("<Button-1>", self.handleCanvasClick)
+        self.canvas.bind("<Button-1>", self.handleCanvasAction)
+
 
         self.canvas.grid(row=0,columnspan=5)
 
@@ -728,31 +752,36 @@ class Application(tk.Frame):
         pathToBallImage = os.path.join("Images", "Ball.png")
 
         #Create Game Tracker
-        self.game = GameTracker(self.canvas, self.timer, self.time, self.score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage)
+        self.game = GameTracker(self.canvas, self.timer, self.time, self.text, self.score, fieldSetup, bluePlayerNames, redPlayerNames, pathToBluePlayerImage, pathToBlueGoalkeeperImage, pathToRedPlayerImage, pathToRedGoalkeeperImage, pathToBallImage)
 
-    def handleCanvasClick(self, event):
+    def handleCanvasAction(self, event):
         self.buttonPlayPause.config(state='normal')
-        self.text.config(state='normal')
+        if self.game.getPaused() == False:
+            self.text.config(state='normal')
+
         if self.game.getGameRunning() == 0:
             self.game.startPlay()
 
     def textReturnHandler(self, event):
-        entryText = self.text.get()  #get contents of entry cell
-        if entryText !=  "" and self.game.getPaused() == False:
-            goodAnswer = self.game.handleUserInput(int(entryText))
+        if self.game.getGameRunning () == False:
+            self.handleCanvasAction()
+        else:
+            entryText = self.text.get()  #get contents of entry cell
+            if entryText !=  "" and self.game.getPaused() == False:
+                goodAnswer = self.game.handleUserInput(int(entryText))
 
-            #first 2 most recent results one to the right
-            for i in range(2, 0, -1):
-                self.labelsLastResults[i].configure(text=self.labelsLastResults[i-1].cget("text"), fg=self.labelsLastResults[i-1].cget("fg"))
+                #first 2 most recent results one to the right
+                for i in range(2, 0, -1):
+                    self.labelsLastResults[i].configure(text=self.labelsLastResults[i-1].cget("text"), fg=self.labelsLastResults[i-1].cget("fg"))
 
-            if goodAnswer == True:
-                newtext = '\u2713'
-                newfg = "green"
-            else:
-                newtext = '\u2718'
-                newfg = "red"
+                if goodAnswer == True:
+                    newtext = '\u2713'
+                    newfg = "green"
+                else:
+                    newtext = '\u2718'
+                    newfg = "red"
 
-            self.labelsLastResults[0].configure(text=newtext, fg=newfg)
+                self.labelsLastResults[0].configure(text=newtext, fg=newfg)
 
         self.text.delete(0, tk.END)
 
